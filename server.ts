@@ -7,7 +7,13 @@ import path from 'path';
 
 dotenv.config();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+if (!stripeSecretKey) {
+  throw new Error('STRIPE_SECRET_KEY environment variable is required for Stripe.');
+}
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2025-01-27.acacia' as any,
 });
 
@@ -23,13 +29,16 @@ db.exec(`
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
   app.use(express.json());
 
   // API Routes
   app.post('/api/create-checkout-session', async (req, res) => {
     try {
+      const appUrl =
+        process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
@@ -47,8 +56,8 @@ async function startServer() {
           },
         ],
         mode: 'payment',
-        success_url: `${process.env.APP_URL}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.APP_URL}/`,
+        success_url: `${appUrl}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/`,
       });
 
       res.json({ id: session.id });

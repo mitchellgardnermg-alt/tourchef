@@ -34,6 +34,13 @@ export default function App() {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
       });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Checkout API error:', response.status, errorBody);
+        alert('Sorry, checkout failed. Please try again in a moment.');
+        return;
+      }
+
       const session = await response.json();
       const stripe = await stripePromise;
       if (stripe) {
