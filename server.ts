@@ -77,12 +77,18 @@ async function startServer() {
     }
   });
 
-  // Mock download endpoint
+  // Real download endpoint - serves the Touring Bundle ZIP from the public directory
   app.get('/api/download', (req, res) => {
-    // In a real app, verify session_id or token
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=TourChef_Ops_Bundle.zip');
-    res.send(Buffer.from('Mock ZIP content - in a real app this would be your bundle file'));
+    // In a production app, you should verify the user's purchase or a signed token here.
+    const bundlePath = path.join(process.cwd(), 'public', 'TourChef_Ops_Touring_Bundle.zip');
+    res.download(bundlePath, 'TourChef_Ops_Touring_Bundle.zip', (err) => {
+      if (err) {
+        console.error('Bundle download error:', err);
+        if (!res.headersSent) {
+          res.status(500).send('Unable to download bundle');
+        }
+      }
+    });
   });
 
   // Vite middleware for development
