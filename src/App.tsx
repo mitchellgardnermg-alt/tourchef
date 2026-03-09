@@ -35,9 +35,11 @@ export default function App() {
         method: 'POST',
       });
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
+        const errorBody = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
         console.error('Checkout API error:', response.status, errorBody);
-        alert('Sorry, checkout failed. Please try again in a moment.');
+        alert(errorBody.error || 'Sorry, checkout failed. Please try again in a moment.');
         return;
       }
 
