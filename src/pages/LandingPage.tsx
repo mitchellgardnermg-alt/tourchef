@@ -1,7 +1,27 @@
+import React from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function LandingPage() {
+  const [aiConfigured, setAiConfigured] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/health');
+        const json = await res.json().catch(() => ({}));
+        const configured = Boolean(json?.ai?.configured);
+        if (!cancelled) setAiConfigured(configured);
+      } catch {
+        if (!cancelled) setAiConfigured(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-app text-app">
       <div className="mx-auto max-w-6xl px-4 py-10">
@@ -21,7 +41,11 @@ export function LandingPage() {
           <section>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              MVP prototype — simulated AI extraction
+              {aiConfigured === true
+                ? 'AI extraction enabled'
+                : aiConfigured === false
+                  ? 'MVP prototype — simulated AI extraction'
+                  : 'MVP prototype'}
             </div>
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
@@ -54,7 +78,9 @@ export function LandingPage() {
               <div className="card p-4">
                 <div className="text-sm font-medium">Generate</div>
                 <div className="text-xs text-white/60 mt-1">
-                  We simulate AI extraction into structured items.
+                  {aiConfigured === true
+                    ? 'AI extracts items into a structured carnet list.'
+                    : 'We simulate AI extraction into structured items.'}
                 </div>
               </div>
               <div className="card p-4">
@@ -99,8 +125,9 @@ export function LandingPage() {
               </div>
 
               <div id="how" className="mt-6 text-xs text-white/60">
-                This MVP generates realistic mock data today — the structure is
-                ready to plug in a real AI model later.
+                {aiConfigured === true
+                  ? 'CarnetAI uses Vision to draft a list from your photos. You can edit everything before export.'
+                  : 'This MVP generates realistic mock data today — the structure is ready to plug in a real AI model later.'}
               </div>
             </div>
           </section>

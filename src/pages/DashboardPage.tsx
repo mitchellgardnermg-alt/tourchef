@@ -3,11 +3,32 @@ import { ImagePlus, Trash2, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateMockCarnetItems } from '../carnet/mock';
 import { filesToUploadedImages, useCarnet } from '../carnet/store';
+import { normalizeAiItems } from '../carnet/ai';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { images, addImages, removeImage, clearItems, setItems } = useCarnet();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [lastError, setLastError] = React.useState<string | null>(null);
+  const [aiConfigured, setAiConfigured] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/health');
+        const json = await res.json().catch(() => ({}));
+        const configured = Boolean(json?.ai?.configured);
+        if (!cancelled) setAiConfigured(configured);
+      } catch {
+        if (!cancelled) setAiConfigured(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onPickFiles = () => inputRef.current?.click();
 
@@ -18,11 +39,51 @@ export function DashboardPage() {
     e.target.value = '';
   };
 
-  const generate = () => {
+  const generate = async () => {
+    setIsGenerating(true);
+    setLastError(null);
     clearItems();
-    const next = generateMockCarnetItems(images);
-    setItems(next);
-    navigate('/results');
+
+    try {
+      try {
+        const fd = new FormData();
+        for (const img of images) fd.append('images', img.file, img.file.name);
+
+        const resp = await fetch('/api/extract-carnet-items', {
+          method: 'POST',
+          body: fd,
+        });
+
+        if (resp.ok) {
+          const json = await resp.json();
+          const { items: aiItems, warnings } = normalizeAiItems(json);
+          if (warnings.length) console.warn('AI warnings:', warnings);
+          if (aiItems.length) {
+            setItems(aiItems);
+            navigate('/results');
+            return;
+          }
+          setLastError('AI did not return any items. Falling back to mock data.');
+        } else {
+          const errJson = await resp.json().catch(() => ({}));
+          const msg =
+            typeof errJson?.error === 'string'
+              ? errJson.error
+              : `AI request failed (${resp.status})`;
+          setLastError(msg + ' Falling back to mock data.');
+        }
+      } catch (e: any) {
+        setLastError(
+          (e?.message || 'AI request failed') + ' Falling back to mock data.'
+        );
+      }
+
+      const next = generateMockCarnetItems(images);
+      setItems(next);
+      navigate('/results');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -41,8 +102,10 @@ export function DashboardPage() {
               <div>
                 <h2 className="text-lg font-semibold">Dashboard</h2>
                 <p className="mt-1 text-sm text-white/60">
-                  Upload multiple images of your equipment. We’ll simulate AI
-                  extraction into a carnet-ready list.
+                  Upload multiple images of your equipment.{' '}
+                  {aiConfigured === true
+                    ? 'AI will extract a carnet-ready list.'
+                    : 'We’ll simulate AI extraction into a carnet-ready list.'}
                 </p>
               </div>
               <button className="btn btn-secondary" onClick={onPickFiles}>
@@ -110,12 +173,18 @@ export function DashboardPage() {
             <button
               className="btn btn-primary mt-5 w-full"
               onClick={generate}
-              disabled={images.length === 0}
+              disabled={images.length === 0 || isGenerating}
               title={images.length === 0 ? 'Upload at least 1 image first' : ''}
             >
               <Wand2 size={16} />
-              Generate Carnet List
+              {isGenerating ? 'Generating…' : 'Generate Carnet List'}
             </button>
+
+            {lastError ? (
+              <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                {lastError}
+              </div>
+            ) : null}
 
             <div className="mt-4 text-xs text-white/50">
               Tip: upload multiple angles for better extraction (once real AI is
