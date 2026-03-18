@@ -44,7 +44,7 @@ export function LandingPage() {
               {aiConfigured === true
                 ? 'AI extraction enabled'
                 : aiConfigured === false
-                  ? 'MVP prototype — simulated AI extraction'
+                  ? 'Set OPENAI_API_KEY to generate from photos'
                   : 'MVP prototype'}
             </div>
 
@@ -80,7 +80,7 @@ export function LandingPage() {
                 <div className="text-xs text-white/60 mt-1">
                   {aiConfigured === true
                     ? 'AI extracts items into a structured carnet list.'
-                    : 'We simulate AI extraction into structured items.'}
+                    : 'Set OPENAI_API_KEY on the server to extract items from your photos.'}
                 </div>
               </div>
               <div className="card p-4">
@@ -127,7 +127,7 @@ export function LandingPage() {
               <div id="how" className="mt-6 text-xs text-white/60">
                 {aiConfigured === true
                   ? 'CarnetAI uses Vision to draft a list from your photos. You can edit everything before export.'
-                  : 'This MVP generates realistic mock data today — the structure is ready to plug in a real AI model later.'}
+                  : 'Set OPENAI_API_KEY on the server; CarnetAI will then draft a list from your photos. You can edit everything before export.'}
               </div>
             </div>
           </section>

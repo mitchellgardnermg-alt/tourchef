@@ -1,7 +1,6 @@
 import React from 'react';
 import { ImagePlus, Trash2, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { generateMockCarnetItems } from '../carnet/mock';
 import { filesToUploadedImages, useCarnet } from '../carnet/store';
 import { normalizeAiItems } from '../carnet/ai';
 
@@ -45,42 +44,37 @@ export function DashboardPage() {
     clearItems();
 
     try {
-      try {
-        const fd = new FormData();
-        for (const img of images) fd.append('images', img.file, img.file.name);
+      const fd = new FormData();
+      for (const img of images) fd.append('images', img.file, img.file.name);
 
-        const resp = await fetch('/api/extract-carnet-items', {
-          method: 'POST',
-          body: fd,
-        });
+      const resp = await fetch('/api/extract-carnet-items', {
+        method: 'POST',
+        body: fd,
+      });
 
-        if (resp.ok) {
-          const json = await resp.json();
-          const { items: aiItems, warnings } = normalizeAiItems(json);
-          if (warnings.length) console.warn('AI warnings:', warnings);
-          if (aiItems.length) {
-            setItems(aiItems);
-            navigate('/results');
-            return;
-          }
-          setLastError('AI did not return any items. Falling back to mock data.');
-        } else {
-          const errJson = await resp.json().catch(() => ({}));
-          const msg =
-            typeof errJson?.error === 'string'
-              ? errJson.error
-              : `AI request failed (${resp.status})`;
-          setLastError(msg + ' Falling back to mock data.');
+      if (resp.ok) {
+        const json = await resp.json();
+        const { items: aiItems, warnings } = normalizeAiItems(json);
+        if (warnings.length) console.warn('AI warnings:', warnings);
+        if (aiItems.length) {
+          setItems(aiItems);
+          navigate('/results');
+          return;
         }
-      } catch (e: any) {
         setLastError(
-          (e?.message || 'AI request failed') + ' Falling back to mock data.'
+          'AI did not return any items from your photos. Try clearer or different images.'
         );
+        return;
       }
 
-      const next = generateMockCarnetItems(images);
-      setItems(next);
-      navigate('/results');
+      const errJson = await resp.json().catch(() => ({}));
+      const msg =
+        typeof errJson?.error === 'string'
+          ? errJson.error
+          : `Request failed (${resp.status}). Check OPENAI_API_KEY is set on the server.`;
+      setLastError(msg);
+    } catch (e: any) {
+      setLastError(e?.message || 'Request failed. Check your connection and server.');
     } finally {
       setIsGenerating(false);
     }
@@ -104,8 +98,8 @@ export function DashboardPage() {
                 <p className="mt-1 text-sm text-white/60">
                   Upload multiple images of your equipment.{' '}
                   {aiConfigured === true
-                    ? 'AI will extract a carnet-ready list.'
-                    : 'We’ll simulate AI extraction into a carnet-ready list.'}
+                    ? 'AI will extract a carnet-ready list from your photos only.'
+                    : 'Set OPENAI_API_KEY on the server to generate lists from your photos.'}
                 </p>
               </div>
               <button className="btn btn-secondary" onClick={onPickFiles}>
@@ -173,8 +167,14 @@ export function DashboardPage() {
             <button
               className="btn btn-primary mt-5 w-full"
               onClick={generate}
-              disabled={images.length === 0 || isGenerating}
-              title={images.length === 0 ? 'Upload at least 1 image first' : ''}
+              disabled={images.length === 0 || isGenerating || aiConfigured === false}
+              title={
+                images.length === 0
+                  ? 'Upload at least 1 image first'
+                  : aiConfigured === false
+                    ? 'Set OPENAI_API_KEY on the server to generate lists'
+                    : ''
+              }
             >
               <Wand2 size={16} />
               {isGenerating ? 'Generating…' : 'Generate Carnet List'}
@@ -185,10 +185,14 @@ export function DashboardPage() {
                 {lastError}
               </div>
             ) : null}
+            {aiConfigured === false ? (
+              <p className="mt-3 text-xs text-white/50">
+                Generate is disabled until OPENAI_API_KEY is set on the server.
+              </p>
+            ) : null}
 
             <div className="mt-4 text-xs text-white/50">
-              Tip: upload multiple angles for better extraction (once real AI is
-              plugged in).
+              Tip: upload clear photos of each item for better extraction.
             </div>
           </aside>
         </main>

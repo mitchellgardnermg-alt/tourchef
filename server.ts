@@ -44,30 +44,38 @@ async function startServer() {
         return {
           type: 'input_image' as const,
           image_url: `data:${mime};base64,${b64}`,
-          detail: 'auto' as const,
+          // "high" helps with reading labels / model numbers / serials.
+          detail: 'high' as const,
         };
       });
 
       const prompt = [
         'You are CarnetAI. Extract an ATA carnet packing list from the provided photos.',
         '',
-        'Return JSON only with this shape:',
+        'You MUST use only what is visible in the photos (including labels, engravings, printed stickers, packaging, and case markings).',
+        'Do NOT invent items. Do NOT guess brand/model/country of origin/serial number/value if not supported by the photos.',
+        'If an item is unclear, omit it.',
+        '',
+        'Search across ALL images for the same item (different angles) and combine duplicates by increasing quantity.',
+        'Prefer model numbers, brand names, and distinctive descriptors when visible.',
+        '',
+        'Return JSON only with this exact shape:',
         '{ "items": [ { "itemDescription": string, "category": "Kitchen Equipment"|"Production Equipment"|"Instruments"|"Audio Equipment"|"Lighting"|"Other", "quantity": number, "valueGbp": number, "countryOfOrigin": string, "weightKg": number|null, "serialNumber": string, "notes": string } ] }',
         '',
         'Rules:',
-        '- Be conservative: if unsure about an item, omit it.',
-        '- Combine duplicates across images (same item name/category) by increasing quantity.',
-        '- ItemDescription must be clear, specific, and uniquely identifiable (include brand/model/capacity where visible). Avoid generic terms like "Pan" or "DJ equipment".',
-        '- Use realistic quantities and GBP values (integer market value).',
-        '- CountryOfOrigin: best guess if not visible; otherwise empty string.',
-        '- WeightKg: include if visible/obvious; otherwise null.',
-        '- SerialNumber: REQUIRED for high-value items; otherwise "N/A" or "No serial".',
-        '- Notes: include case ID, brand/model, or where serial is located if helpful; otherwise empty string.',
+        '- ItemDescription must be clear, specific, and uniquely identifiable. Include brand/model/capacity/color where visible. Avoid generic terms like "Pan" or "DJ equipment".',
+        '- Quantity: integer >= 1.',
+        '- valueGbp: integer >= 0. If price/value is not visible, set to 0 (do not guess).',
+        '- countryOfOrigin: ONLY if explicitly visible (e.g., "Made in ..."). Otherwise empty string.',
+        '- weightKg: ONLY if explicitly visible or clearly printed. Otherwise null.',
+        '- serialNumber: ONLY if explicitly visible. If not visible, use "N/A".',
+        '- notes: include helpful evidence like: "Label shows MODEL XYZ", "Case marked 03", "Sticker reads Made in UK", "Serial on rear panel". Otherwise empty string.',
         '- No markdown, no extra keys.',
       ].join('\n');
 
       const response = await openai.responses.create({
         model,
+        temperature: 0,
         input: [
           {
             role: 'user',
@@ -84,7 +92,27 @@ async function startServer() {
         return res.status(502).json({ error: 'Model returned non-JSON output.', raw: text });
       }
 
-      return res.json(parsed);
+      const items = Array.isArray(parsed?.items) ? parsed.items : null;
+      if (!items) {
+        return res.status(502).json({ error: 'Model JSON did not include an items array.', raw: parsed });
+      }
+
+      // Minimal shape validation; frontend normalizes further.
+      const sanitizedItems = items
+        .filter((it: any) => it && typeof it === 'object')
+        .map((it: any) => ({
+          itemDescription: typeof it.itemDescription === 'string' ? it.itemDescription : '',
+          category: typeof it.category === 'string' ? it.category : 'Other',
+          quantity: Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1,
+          valueGbp: Number.isFinite(Number(it.valueGbp)) ? Number(it.valueGbp) : 0,
+          countryOfOrigin: typeof it.countryOfOrigin === 'string' ? it.countryOfOrigin : '',
+          weightKg: it.weightKg === null || Number.isFinite(Number(it.weightKg)) ? it.weightKg : null,
+          serialNumber: typeof it.serialNumber === 'string' ? it.serialNumber : 'N/A',
+          notes: typeof it.notes === 'string' ? it.notes : '',
+        }))
+        .filter((it: any) => typeof it.itemDescription === 'string' && it.itemDescription.trim().length > 0);
+
+      return res.json({ items: sanitizedItems });
     } catch (err: any) {
       console.error('AI extract error:', err);
       return res.status(500).json({ error: err?.message || 'AI extraction failed' });
