@@ -1,31 +1,8 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import Stripe from 'stripe';
 import dotenv from 'dotenv';
-import Database from 'better-sqlite3';
-import path from 'path';
 
 dotenv.config();
-
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required for Stripe.');
-}
-
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2025-01-27.acacia' as any,
-});
-
-// Initialize Database
-const db = new Database('tourchef.db');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS subscribers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
 
 async function startServer() {
   const app = express();
@@ -33,71 +10,8 @@ async function startServer() {
 
   app.use(express.json());
 
-  // API Routes
-  app.post('/api/create-checkout-session', async (req, res) => {
-    try {
-      const appUrl =
-        process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'gbp',
-              product_data: {
-                name: 'Touring Catering Ops Bundle',
-                description: 'The complete toolkit for touring and event catering teams.',
-                images: ['https://picsum.photos/seed/tour-bundle/800/600'],
-              },
-              unit_amount: 2900, // £29.00
-            },
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${appUrl}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appUrl}/`,
-      });
-
-      res.json({ id: session.id });
-    } catch (error: any) {
-      console.error('Stripe error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post('/api/subscribe', (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    
-    try {
-      const stmt = db.prepare('INSERT INTO subscribers (email) VALUES (?)');
-      stmt.run(email);
-      console.log(`New subscriber saved: ${email}`);
-      // In a real app, you'd trigger an email here via SendGrid/Postmark
-      res.json({ success: true });
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT') {
-        return res.json({ success: true, message: 'Already subscribed' });
-      }
-      console.error('Database error:', error);
-      res.status(500).json({ error: 'Failed to save subscriber' });
-    }
-  });
-
-  // Real download endpoint - serves the Touring Bundle ZIP from the public directory
-  app.get('/api/download', (req, res) => {
-    // In a production app, you should verify the user's purchase or a signed token here.
-    const bundlePath = path.join(process.cwd(), 'public', 'TourChef_Ops_Touring_Bundle.zip');
-    res.download(bundlePath, 'TourChef_Ops_Touring_Bundle.zip', (err) => {
-      if (err) {
-        console.error('Bundle download error:', err);
-        if (!res.headersSent) {
-          res.status(500).send('Unable to download bundle');
-        }
-      }
-    });
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
   });
 
   // Vite middleware for development
@@ -115,7 +29,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`CarnetAI server running on http://localhost:${PORT}`);
   });
 }
 
