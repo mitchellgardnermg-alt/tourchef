@@ -28,12 +28,24 @@ export function exportCarnetAsPdf(items: CarnetItem[]) {
     66
   );
 
-  const head = [['Item Name', 'Category', 'Qty', 'Estimated Value (£)', 'Notes']];
+  const head = [[
+    'Item Description',
+    'Category',
+    'Qty',
+    'Value (GBP)',
+    'Country of Origin',
+    'Weight (kg)',
+    'Serial / Identifier',
+    'Notes',
+  ]];
   const body = items.map((it) => [
-    it.itemName,
+    it.itemDescription,
     it.category,
     String(it.quantity),
-    formatGbp(it.estimatedValueGbp),
+    formatGbp(it.valueGbp),
+    it.countryOfOrigin || '',
+    it.weightKg === undefined ? '' : String(it.weightKg),
+    it.serialNumber || '',
     it.notes || '',
   ]);
 
@@ -44,11 +56,14 @@ export function exportCarnetAsPdf(items: CarnetItem[]) {
     styles: { fontSize: 9, cellPadding: 6, overflow: 'linebreak' },
     headStyles: { fillColor: [24, 24, 27] },
     columnStyles: {
-      0: { cellWidth: 160 },
-      1: { cellWidth: 90 },
+      0: { cellWidth: 150 },
+      1: { cellWidth: 85 },
       2: { cellWidth: 35, halign: 'right' },
-      3: { cellWidth: 90, halign: 'right' },
-      4: { cellWidth: 160 },
+      3: { cellWidth: 70, halign: 'right' },
+      4: { cellWidth: 75 },
+      5: { cellWidth: 60, halign: 'right' },
+      6: { cellWidth: 90 },
+      7: { cellWidth: 115 },
     },
     margin: { left: marginX, right: marginX },
   });
@@ -58,10 +73,13 @@ export function exportCarnetAsPdf(items: CarnetItem[]) {
 
 export function exportCarnetAsExcel(items: CarnetItem[]) {
   const rows = items.map((it) => ({
-    'Item Name': it.itemName,
+    'Item Description': it.itemDescription,
     Category: it.category,
     Quantity: it.quantity,
-    'Estimated Value (£)': it.estimatedValueGbp,
+    'Value (GBP)': it.valueGbp,
+    'Country of Origin': it.countryOfOrigin,
+    'Weight (kg)': it.weightKg ?? '',
+    'Serial / Identifier': it.serialNumber,
     Notes: it.notes,
   }));
 

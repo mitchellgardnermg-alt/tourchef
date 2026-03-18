@@ -34,10 +34,13 @@ function makeImage(file: File): UploadedImage {
 function makeBlankItem(): CarnetItem {
   return {
     id: globalThis.crypto?.randomUUID?.() ?? `item_${Date.now()}`,
-    itemName: 'New Item',
+    itemDescription: 'New item (be specific)',
     category: 'Other',
     quantity: 1,
-    estimatedValueGbp: 0,
+    valueGbp: 0,
+    countryOfOrigin: '',
+    weightKg: undefined,
+    serialNumber: 'N/A',
     notes: '',
   };
 }

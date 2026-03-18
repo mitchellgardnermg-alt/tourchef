@@ -6,13 +6,11 @@ import { useCarnet } from '../carnet/store';
 import type { CarnetCategory, CarnetItem } from '../carnet/types';
 
 const CATEGORIES: CarnetCategory[] = [
-  'Kitchen',
-  'Production',
+  'Kitchen Equipment',
+  'Production Equipment',
   'Instruments',
-  'Audio',
+  'Audio Equipment',
   'Lighting',
-  'Backline',
-  'IT',
   'Other',
 ];
 
@@ -30,15 +28,17 @@ export function ResultsPage() {
   }, [items.length, navigate]);
 
   const totalValue = React.useMemo(
-    () =>
-      items.reduce(
-        (acc, it) => acc + (it.estimatedValueGbp || 0) * (it.quantity || 0),
-        0
-      ),
+    () => items.reduce((acc, it) => acc + (it.valueGbp || 0) * (it.quantity || 0), 0),
     [items]
   );
 
-  const onAddItem = () => addItem({ itemName: 'New Item', category: 'Other' });
+  const onAddItem = () =>
+    addItem({
+      itemDescription: 'New item (be specific)',
+      category: 'Other',
+      serialNumber: 'N/A',
+      countryOfOrigin: '',
+    });
 
   const onExportPdf = () => exportCarnetAsPdf(items);
   const onExportExcel = () => exportCarnetAsExcel(items);
@@ -97,12 +97,12 @@ export function ResultsPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[880px] text-sm">
+              <table className="w-full min-w-[1180px] text-sm">
                 <thead className="text-xs uppercase tracking-wider text-white/55">
                   <tr className="border-b border-white/10">
                     <th className="px-5 py-3 text-left">
-                      <button className="hover:text-white" onClick={() => onSort('itemName')}>
-                        Item Name
+                      <button className="hover:text-white" onClick={() => onSort('itemDescription')}>
+                        Item Description
                       </button>
                     </th>
                     <th className="px-5 py-3 text-left">
@@ -118,9 +118,24 @@ export function ResultsPage() {
                     <th className="px-5 py-3 text-right">
                       <button
                         className="hover:text-white"
-                        onClick={() => onSort('estimatedValueGbp')}
+                        onClick={() => onSort('valueGbp')}
                       >
-                        Estimated Value (£)
+                        Value (GBP)
+                      </button>
+                    </th>
+                    <th className="px-5 py-3 text-left">
+                      <button className="hover:text-white" onClick={() => onSort('countryOfOrigin')}>
+                        Country of Origin
+                      </button>
+                    </th>
+                    <th className="px-5 py-3 text-right">
+                      <button className="hover:text-white" onClick={() => onSort('weightKg')}>
+                        Weight (kg)
+                      </button>
+                    </th>
+                    <th className="px-5 py-3 text-left">
+                      <button className="hover:text-white" onClick={() => onSort('serialNumber')}>
+                        Serial / Identifier
                       </button>
                     </th>
                     <th className="px-5 py-3 text-left">Notes</th>
@@ -132,8 +147,8 @@ export function ResultsPage() {
                     <tr key={it.id} className="hover:bg-white/[0.03]">
                       <td className="px-5 py-3">
                         <input
-                          value={it.itemName}
-                          onChange={(e) => updateItem(it.id, { itemName: e.target.value })}
+                          value={it.itemDescription}
+                          onChange={(e) => updateItem(it.id, { itemDescription: e.target.value })}
                           className="input w-full"
                         />
                       </td>
@@ -167,12 +182,12 @@ export function ResultsPage() {
                       <td className="px-5 py-3 text-right">
                         <input
                           inputMode="numeric"
-                          value={String(it.estimatedValueGbp)}
+                          value={String(it.valueGbp)}
                           onChange={(e) =>
                             updateItem(it.id, {
-                              estimatedValueGbp: Math.max(
+                              valueGbp: Math.max(
                                 0,
-                                parseNumber(e.target.value, it.estimatedValueGbp)
+                                parseNumber(e.target.value, it.valueGbp)
                               ),
                             })
                           }
@@ -181,10 +196,40 @@ export function ResultsPage() {
                       </td>
                       <td className="px-5 py-3">
                         <input
+                          value={it.countryOfOrigin}
+                          onChange={(e) => updateItem(it.id, { countryOfOrigin: e.target.value })}
+                          className="input w-full"
+                          placeholder="e.g. UK, China, Germany"
+                        />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <input
+                          inputMode="decimal"
+                          value={it.weightKg === undefined ? '' : String(it.weightKg)}
+                          onChange={(e) => {
+                            const v = e.target.value.trim();
+                            updateItem(it.id, {
+                              weightKg: v === '' ? undefined : Math.max(0, parseNumber(v, it.weightKg ?? 0)),
+                            });
+                          }}
+                          className="input w-28 text-right"
+                          placeholder="optional"
+                        />
+                      </td>
+                      <td className="px-5 py-3">
+                        <input
+                          value={it.serialNumber}
+                          onChange={(e) => updateItem(it.id, { serialNumber: e.target.value })}
+                          className="input w-full"
+                          placeholder='e.g. "No serial" or actual serial'
+                        />
+                      </td>
+                      <td className="px-5 py-3">
+                        <input
                           value={it.notes}
                           onChange={(e) => updateItem(it.id, { notes: e.target.value })}
                           className="input w-full"
-                          placeholder="e.g. serial no., case details, condition"
+                          placeholder="e.g. brand/model, case ID, condition"
                         />
                       </td>
                       <td className="px-5 py-3 text-right">

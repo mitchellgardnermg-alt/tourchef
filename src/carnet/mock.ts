@@ -1,131 +1,181 @@
 import type { CarnetCategory, CarnetItem, UploadedImage } from './types';
 
 const CATEGORIES: CarnetCategory[] = [
-  'Kitchen',
-  'Production',
+  'Kitchen Equipment',
+  'Production Equipment',
   'Instruments',
-  'Audio',
+  'Audio Equipment',
   'Lighting',
-  'Backline',
-  'IT',
   'Other',
 ];
 
 const SAMPLE_ITEMS: Array<{
-  itemName: string;
+  itemDescription: string;
   category: CarnetCategory;
   minQty: number;
   maxQty: number;
   minValue: number;
   maxValue: number;
+  countryOfOrigin: string;
+  minWeightKg?: number;
+  maxWeightKg?: number;
+  serialNumber: string;
   notes: string;
 }> = [
   {
-    itemName: 'Stainless Steel Pan',
-    category: 'Kitchen',
+    itemDescription: 'Stainless Steel 5L Saucepan',
+    category: 'Kitchen Equipment',
     minQty: 2,
     maxQty: 8,
     minValue: 18,
     maxValue: 55,
+    countryOfOrigin: 'China',
+    minWeightKg: 0.6,
+    maxWeightKg: 1.4,
+    serialNumber: 'No serial',
     notes: 'Assorted sizes',
   },
   {
-    itemName: 'Gas Burner',
-    category: 'Kitchen',
+    itemDescription: 'Portable Gas Burner (Single Ring)',
+    category: 'Kitchen Equipment',
     minQty: 1,
     maxQty: 3,
     minValue: 45,
     maxValue: 140,
+    countryOfOrigin: 'China',
+    minWeightKg: 1.8,
+    maxWeightKg: 4.2,
+    serialNumber: 'No serial',
     notes: 'Portable single ring',
   },
   {
-    itemName: 'Chef Knife Set',
-    category: 'Kitchen',
+    itemDescription: 'Chef Knife Set (8-piece) + Sharpening Steel',
+    category: 'Kitchen Equipment',
     minQty: 1,
     maxQty: 2,
     minValue: 120,
     maxValue: 380,
+    countryOfOrigin: 'Germany',
+    minWeightKg: 1.0,
+    maxWeightKg: 2.5,
+    serialNumber: 'N/A',
     notes: 'Includes sharpening steel',
   },
   {
-    itemName: 'Food Processor',
-    category: 'Kitchen',
+    itemDescription: 'Food Processor (with bowl + blade attachments)',
+    category: 'Kitchen Equipment',
     minQty: 1,
     maxQty: 2,
     minValue: 95,
     maxValue: 320,
+    countryOfOrigin: 'China',
+    minWeightKg: 3.5,
+    maxWeightKg: 7.5,
+    serialNumber: 'N/A',
     notes: 'Bowl + blade attachments',
   },
   {
-    itemName: 'Extension Cable (25m)',
-    category: 'Production',
+    itemDescription: 'Extension Cable 25m (UK Plug, 13A)',
+    category: 'Production Equipment',
     minQty: 4,
     maxQty: 16,
     minValue: 12,
     maxValue: 35,
+    countryOfOrigin: 'UK',
+    minWeightKg: 2.0,
+    maxWeightKg: 4.5,
+    serialNumber: 'N/A',
     notes: 'UK plug',
   },
   {
-    itemName: 'Label Printer',
-    category: 'IT',
+    itemDescription: 'Label Printer (thermal) + spare rolls',
+    category: 'Production Equipment',
     minQty: 1,
     maxQty: 2,
     minValue: 65,
     maxValue: 210,
+    countryOfOrigin: 'China',
+    minWeightKg: 0.8,
+    maxWeightKg: 2.2,
+    serialNumber: 'N/A',
     notes: 'With spare rolls',
   },
   {
-    itemName: 'Wireless Microphone (Handheld)',
-    category: 'Audio',
+    itemDescription: 'Wireless Microphone (Handheld) + Receiver',
+    category: 'Audio Equipment',
     minQty: 2,
     maxQty: 6,
     minValue: 180,
     maxValue: 640,
+    countryOfOrigin: 'Malaysia',
+    minWeightKg: 0.4,
+    maxWeightKg: 1.2,
+    serialNumber: 'See Notes',
     notes: 'Receivers in rack case',
   },
   {
-    itemName: 'DI Box',
-    category: 'Audio',
+    itemDescription: 'DI Box (active)',
+    category: 'Audio Equipment',
     minQty: 4,
     maxQty: 12,
     minValue: 25,
     maxValue: 140,
+    countryOfOrigin: 'China',
+    minWeightKg: 0.3,
+    maxWeightKg: 0.8,
+    serialNumber: 'N/A',
     notes: 'Active mix',
   },
   {
-    itemName: 'LED Par Can',
+    itemDescription: 'LED Par Can (DMX capable)',
     category: 'Lighting',
     minQty: 6,
     maxQty: 24,
     minValue: 45,
     maxValue: 220,
+    countryOfOrigin: 'China',
+    minWeightKg: 1.2,
+    maxWeightKg: 3.0,
+    serialNumber: 'N/A',
     notes: 'DMX capable',
   },
   {
-    itemName: 'Tripod Stand',
-    category: 'Production',
+    itemDescription: 'Tripod Stand (aluminium)',
+    category: 'Production Equipment',
     minQty: 2,
     maxQty: 8,
     minValue: 18,
     maxValue: 85,
+    countryOfOrigin: 'China',
+    minWeightKg: 1.1,
+    maxWeightKg: 2.6,
+    serialNumber: 'N/A',
     notes: 'Lightweight aluminium',
   },
   {
-    itemName: 'Electric Guitar',
+    itemDescription: 'Electric Guitar (in hard case)',
     category: 'Instruments',
     minQty: 1,
     maxQty: 3,
     minValue: 350,
     maxValue: 2400,
+    countryOfOrigin: 'USA',
+    minWeightKg: 3.0,
+    maxWeightKg: 6.0,
+    serialNumber: 'Required (if present)',
     notes: 'In hard case',
   },
   {
-    itemName: 'Guitar Pedalboard',
-    category: 'Backline',
+    itemDescription: 'Guitar Pedalboard (incl. power supply)',
+    category: 'Instruments',
     minQty: 1,
     maxQty: 2,
     minValue: 260,
     maxValue: 1400,
+    countryOfOrigin: 'UK',
+    minWeightKg: 2.0,
+    maxWeightKg: 7.0,
+    serialNumber: 'N/A',
     notes: 'Power supply included',
   },
 ];
@@ -177,13 +227,20 @@ export function generateMockCarnetItems(images: UploadedImage[]): CarnetItem[] {
       s.minValue,
       s.maxValue
     );
+    const weightKg =
+      typeof s.minWeightKg === 'number' && typeof s.maxWeightKg === 'number'
+        ? Math.round((s.minWeightKg + rng() * (s.maxWeightKg - s.minWeightKg)) * 10) / 10
+        : undefined;
 
     items.push({
       id: globalThis.crypto?.randomUUID?.() ?? `item_${items.length}_${idx}`,
-      itemName: s.itemName,
+      itemDescription: s.itemDescription,
       category: s.category,
       quantity,
-      estimatedValueGbp,
+      valueGbp: estimatedValueGbp,
+      countryOfOrigin: s.countryOfOrigin,
+      weightKg,
+      serialNumber: s.serialNumber,
       notes: s.notes,
     });
   }
@@ -194,16 +251,19 @@ export function generateMockCarnetItems(images: UploadedImage[]): CarnetItem[] {
     const cat = pick(rng, CATEGORIES);
     items.push({
       id: globalThis.crypto?.randomUUID?.() ?? `extra_${i}`,
-      itemName:
-        cat === 'Kitchen'
-          ? 'Flight Case (Kitchen)'
-          : cat === 'Audio'
-          ? 'XLR Cable Bundle'
-          : 'Flight Case',
+      itemDescription:
+        cat === 'Kitchen Equipment'
+          ? 'Flight Case (kitchen equipment)'
+          : cat === 'Audio Equipment'
+            ? 'XLR Cable Bundle (assorted lengths)'
+            : 'Flight Case (foam inserts)',
       category: cat,
       quantity: clampInt(1 + rng() * 4, 1, 5),
-      estimatedValueGbp: clampInt(50 + rng() * 400, 50, 450),
-      notes: 'Packed with foam inserts',
+      valueGbp: clampInt(50 + rng() * 400, 50, 450),
+      countryOfOrigin: pick(rng, ['UK', 'China', 'Germany', 'USA', 'Japan']),
+      weightKg: Math.round((8 + rng() * 18) * 10) / 10,
+      serialNumber: 'N/A',
+      notes: 'Case ID: N/A',
     });
   }
 

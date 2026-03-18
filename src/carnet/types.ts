@@ -1,19 +1,20 @@
 export type CarnetCategory =
-  | 'Kitchen'
-  | 'Production'
+  | 'Kitchen Equipment'
+  | 'Production Equipment'
   | 'Instruments'
-  | 'Audio'
+  | 'Audio Equipment'
   | 'Lighting'
-  | 'Backline'
-  | 'IT'
   | 'Other';
 
 export type CarnetItem = {
   id: string;
-  itemName: string;
+  itemDescription: string;
   category: CarnetCategory;
   quantity: number;
-  estimatedValueGbp: number;
+  valueGbp: number;
+  countryOfOrigin: string;
+  weightKg?: number;
+  serialNumber: string;
   notes: string;
 };
 

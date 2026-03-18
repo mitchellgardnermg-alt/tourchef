@@ -6,13 +6,11 @@ export type AiExtractResult = {
 };
 
 const CATEGORIES: CarnetCategory[] = [
-  'Kitchen',
-  'Production',
+  'Kitchen Equipment',
+  'Production Equipment',
   'Instruments',
-  'Audio',
+  'Audio Equipment',
   'Lighting',
-  'Backline',
-  'IT',
   'Other',
 ];
 
@@ -31,26 +29,56 @@ export function normalizeAiItems(raw: unknown): AiExtractResult {
   for (const it of arr) {
     const o = asObj(it);
     if (!o) continue;
-    const itemName = typeof o.itemName === 'string' ? o.itemName.trim() : '';
-    if (!itemName) continue;
+    const itemDescription =
+      typeof o.itemDescription === 'string'
+        ? o.itemDescription.trim()
+        : typeof o.itemName === 'string'
+          ? o.itemName.trim()
+          : '';
+    if (!itemDescription) continue;
 
     const categoryRaw = typeof o.category === 'string' ? o.category.trim() : 'Other';
     const category = (CATEGORIES.includes(categoryRaw as any)
       ? (categoryRaw as CarnetCategory)
       : 'Other') as CarnetCategory;
 
-    const quantity = Number.isFinite(Number(o.quantity)) ? Math.max(0, Math.round(Number(o.quantity))) : 1;
-    const estimatedValueGbp = Number.isFinite(Number(o.estimatedValueGbp))
-      ? Math.max(0, Math.round(Number(o.estimatedValueGbp)))
+    const quantity = Number.isFinite(Number(o.quantity))
+      ? Math.max(0, Math.round(Number(o.quantity)))
+      : 1;
+
+    const valueGbp = Number.isFinite(Number(o.valueGbp))
+      ? Math.max(0, Math.round(Number(o.valueGbp)))
+      : Number.isFinite(Number(o.estimatedValueGbp))
+        ? Math.max(0, Math.round(Number(o.estimatedValueGbp)))
       : 0;
+
+    const countryOfOrigin =
+      typeof o.countryOfOrigin === 'string' ? o.countryOfOrigin.trim() : '';
+
+    const weightKgRaw = o.weightKg;
+    const weightKg =
+      weightKgRaw === null || weightKgRaw === undefined || weightKgRaw === ''
+        ? undefined
+        : Number.isFinite(Number(weightKgRaw))
+          ? Math.max(0, Number(weightKgRaw))
+          : undefined;
+
+    const serialNumber =
+      typeof o.serialNumber === 'string' && o.serialNumber.trim()
+        ? o.serialNumber.trim()
+        : 'N/A';
+
     const notes = typeof o.notes === 'string' ? o.notes : '';
 
     items.push({
       id: globalThis.crypto?.randomUUID?.() ?? `ai_${items.length}_${Date.now()}`,
-      itemName,
+      itemDescription,
       category,
       quantity,
-      estimatedValueGbp,
+      valueGbp,
+      countryOfOrigin,
+      weightKg,
+      serialNumber,
       notes,
     });
   }
