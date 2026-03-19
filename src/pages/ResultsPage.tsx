@@ -1,9 +1,10 @@
 import React from 'react';
-import { Download, FileSpreadsheet, Plus, ArrowLeft } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, ArrowLeft, ImagePlus, Wand2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { exportCarnetAsExcel, exportCarnetAsPdf } from '../carnet/export';
-import { useCarnet } from '../carnet/store';
+import { filesToUploadedImages, useCarnet } from '../carnet/store';
 import type { CarnetCategory, CarnetItem } from '../carnet/types';
+import { normalizeAiItems } from '../carnet/ai';
 
 const CATEGORIES: CarnetCategory[] = [
   'Kitchen Equipment',
@@ -19,13 +20,73 @@ function parseNumber(value: string, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function mergeItems(existing: CarnetItem[], incoming: CarnetItem[]) {
+  const keyOf = (it: CarnetItem) =>
+    `${it.category}::${(it.serialNumber || '').trim().toLowerCase()}::${it.itemDescription
+      .trim()
+      .toLowerCase()}`;
+
+  const byKey = new Map<string, CarnetItem>();
+  const next = existing.map((it) => {
+    byKey.set(keyOf(it), it);
+    return it;
+  });
+
+  for (const inc of incoming) {
+    const k = keyOf(inc);
+    const found = byKey.get(k);
+    if (!found) {
+      next.push(inc);
+      byKey.set(k, inc);
+      continue;
+    }
+
+    // Merge conservatively: increase quantity; fill blanks only.
+    found.quantity = Math.max(0, (found.quantity || 0) + (inc.quantity || 0));
+    if (!found.valueGbp && inc.valueGbp) found.valueGbp = inc.valueGbp;
+    if (!found.countryOfOrigin && inc.countryOfOrigin) found.countryOfOrigin = inc.countryOfOrigin;
+    if (found.weightKg === undefined && inc.weightKg !== undefined) found.weightKg = inc.weightKg;
+    if (
+      (!found.serialNumber || found.serialNumber === 'N/A') &&
+      inc.serialNumber &&
+      inc.serialNumber !== 'N/A'
+    ) {
+      found.serialNumber = inc.serialNumber;
+    }
+    if (!found.notes && inc.notes) found.notes = inc.notes;
+  }
+
+  return next;
+}
+
 export function ResultsPage() {
   const navigate = useNavigate();
-  const { images, items, setItems, updateItem, addItem, removeItem } = useCarnet();
+  const { images, items, setItems, updateItem, addItem, removeItem, addImages } = useCarnet();
+  const [aiConfigured, setAiConfigured] = React.useState<boolean | null>(null);
+  const [isExtracting, setIsExtracting] = React.useState(false);
+  const [extractError, setExtractError] = React.useState<string | null>(null);
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (items.length === 0) navigate('/dashboard');
   }, [items.length, navigate]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((j) => {
+        if (!mounted) return;
+        setAiConfigured(Boolean(j?.ai?.configured));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAiConfigured(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const totalValue = React.useMemo(
     () => items.reduce((acc, it) => acc + (it.valueGbp || 0) * (it.quantity || 0), 0),
@@ -42,6 +103,50 @@ export function ResultsPage() {
 
   const onExportPdf = () => exportCarnetAsPdf(items);
   const onExportExcel = () => exportCarnetAsExcel(items);
+
+  const onPickMoreImages = () => uploadInputRef.current?.click();
+
+  const onMoreImagesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    e.target.value = '';
+    if (!fileList || fileList.length === 0) return;
+
+    setExtractError(null);
+    setIsExtracting(true);
+
+    const newUploaded = filesToUploadedImages(fileList);
+    addImages(newUploaded);
+
+    try {
+      const fd = new FormData();
+      for (const img of newUploaded) fd.append('images', img.file, img.file.name);
+
+      const resp = await fetch('/api/extract-carnet-items', { method: 'POST', body: fd });
+      if (!resp.ok) {
+        const errJson = await resp.json().catch(() => ({}));
+        const msg =
+          typeof errJson?.error === 'string'
+            ? errJson.error
+            : `Request failed (${resp.status}).`;
+        setExtractError(msg);
+        return;
+      }
+
+      const json = await resp.json();
+      const { items: aiItems, warnings } = normalizeAiItems(json);
+      if (warnings.length) console.warn('AI warnings:', warnings);
+      if (!aiItems.length) {
+        setExtractError('AI did not return any items from these photos. Try clearer images.');
+        return;
+      }
+
+      setItems(mergeItems(items, aiItems));
+    } catch (err: any) {
+      setExtractError(err?.message || 'Request failed. Check your connection and server.');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const onSort = (key: keyof CarnetItem) => {
     const next = [...items].sort((a, b) => {
@@ -72,6 +177,26 @@ export function ResultsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              className="btn btn-secondary"
+              onClick={onPickMoreImages}
+              disabled={isExtracting || aiConfigured === false}
+              title={
+                aiConfigured === false
+                  ? 'Set OPENAI_API_KEY on the server to extract from photos'
+                  : ''
+              }
+            >
+              <ImagePlus size={16} /> Upload more images
+            </button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={onMoreImagesSelected}
+            />
             <button className="btn btn-secondary" onClick={onAddItem}>
               <Plus size={16} /> Add Item
             </button>
@@ -85,6 +210,21 @@ export function ResultsPage() {
         </header>
 
         <main className="mt-8">
+          {extractError ? (
+            <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              {extractError}
+            </div>
+          ) : null}
+
+          {isExtracting ? (
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+              <span className="inline-flex items-center gap-2">
+                <Wand2 size={16} />
+                Extracting items from your new photos…
+              </span>
+            </div>
+          ) : null}
+
           <section className="card overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/5 px-5 py-4">
               <div className="text-sm font-semibold">Carnet list</div>
