@@ -2,6 +2,9 @@ import type { CarnetCategory, CarnetItem, UploadedImage } from './types';
 
 const CATEGORIES: CarnetCategory[] = [
   'Kitchen Equipment',
+  'Utensils',
+  'Electrical Equipment',
+  'Furniture',
   'Production Equipment',
   'Instruments',
   'Audio Equipment',

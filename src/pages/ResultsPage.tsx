@@ -8,6 +8,9 @@ import { normalizeAiItems } from '../carnet/ai';
 
 const CATEGORIES: CarnetCategory[] = [
   'Kitchen Equipment',
+  'Utensils',
+  'Electrical Equipment',
+  'Furniture',
   'Production Equipment',
   'Instruments',
   'Audio Equipment',
@@ -20,24 +23,25 @@ function parseNumber(value: string, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function mergeItems(existing: CarnetItem[], incoming: CarnetItem[]) {
+function mergeItems(existing: CarnetItem[], incoming: CarnetItem[]): CarnetItem[] {
   const keyOf = (it: CarnetItem) =>
     `${it.category}::${(it.serialNumber || '').trim().toLowerCase()}::${it.itemDescription
       .trim()
       .toLowerCase()}`;
 
   const byKey = new Map<string, CarnetItem>();
-  const next = existing.map((it) => {
-    byKey.set(keyOf(it), it);
-    return it;
+  const next: CarnetItem[] = existing.map((it) => {
+    const copy = { ...it };
+    byKey.set(keyOf(copy), copy);
+    return copy;
   });
 
   for (const inc of incoming) {
     const k = keyOf(inc);
     const found = byKey.get(k);
     if (!found) {
-      next.push(inc);
-      byKey.set(k, inc);
+      next.push({ ...inc });
+      byKey.set(k, next[next.length - 1]);
       continue;
     }
 
@@ -140,7 +144,7 @@ export function ResultsPage() {
         return;
       }
 
-      setItems(mergeItems(items, aiItems));
+      setItems((prev) => mergeItems(prev, aiItems));
     } catch (err: any) {
       setExtractError(err?.message || 'Request failed. Check your connection and server.');
     } finally {

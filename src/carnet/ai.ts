@@ -7,6 +7,9 @@ export type AiExtractResult = {
 
 const CATEGORIES: CarnetCategory[] = [
   'Kitchen Equipment',
+  'Utensils',
+  'Electrical Equipment',
+  'Furniture',
   'Production Equipment',
   'Instruments',
   'Audio Equipment',
@@ -34,7 +37,9 @@ export function normalizeAiItems(raw: unknown): AiExtractResult {
         ? o.itemDescription.trim()
         : typeof o.itemName === 'string'
           ? o.itemName.trim()
-          : '';
+          : typeof o.item_name === 'string'
+            ? o.item_name.trim()
+            : '';
     if (!itemDescription) continue;
 
     const categoryRaw = typeof o.category === 'string' ? o.category.trim() : 'Other';
@@ -50,7 +55,9 @@ export function normalizeAiItems(raw: unknown): AiExtractResult {
       ? Math.max(0, Math.round(Number(o.valueGbp)))
       : Number.isFinite(Number(o.estimatedValueGbp))
         ? Math.max(0, Math.round(Number(o.estimatedValueGbp)))
-      : 0;
+        : Number.isFinite(Number(o.estimated_value_gbp))
+          ? Math.max(0, Math.round(Number(o.estimated_value_gbp)))
+          : 0;
 
     const countryOfOrigin =
       typeof o.countryOfOrigin === 'string' ? o.countryOfOrigin.trim() : '';

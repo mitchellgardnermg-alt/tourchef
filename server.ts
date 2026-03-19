@@ -50,26 +50,29 @@ async function startServer() {
       });
 
       const prompt = [
-        'You are CarnetAI. Extract an ATA carnet packing list from the provided photos.',
+        'You are an expert in preparing ATA carnet packing lists for customs.',
         '',
-        'You MUST use only what is visible in the photos (including labels, engravings, printed stickers, packaging, and case markings).',
-        'Do NOT invent items. Do NOT guess brand/model/country of origin/serial number/value if not supported by the photos.',
-        'If an item is unclear, omit it.',
+        'Analyse the images and identify ALL physical items.',
         '',
-        'Search across ALL images for the same item (different angles) and combine duplicates by increasing quantity.',
-        'Prefer model numbers, brand names, and distinctive descriptors when visible.',
+        'IMPORTANT RULES:',
+        '- Group identical items into one line with quantity',
+        '- Use professional, specific names (e.g. "Stainless Steel Saucepan", not "pot")',
+        '- Do NOT be vague',
+        '- Focus on equipment only (ignore background clutter)',
+        '- If items are part of a set, group them (e.g. "Cutlery Set")',
+        '- Search across ALL images for the same item and combine duplicates by increasing quantity',
+        '- Use only what is visible; do NOT invent items or guess values if not supported by the photos',
         '',
-        'Return JSON only with this exact shape:',
-        '{ "items": [ { "itemDescription": string, "category": "Kitchen Equipment"|"Production Equipment"|"Instruments"|"Audio Equipment"|"Lighting"|"Other", "quantity": number, "valueGbp": number, "countryOfOrigin": string, "weightKg": number|null, "serialNumber": string, "notes": string } ] }',
+        'Return JSON only. Use this exact shape (array of objects):',
+        '[ { "item_name": string, "category": string, "quantity": number, "estimated_value_gbp": number, "notes": string } ]',
+        '',
+        'Categories (choose one per item): Kitchen Equipment, Utensils, Electrical Equipment, Furniture, Audio Equipment, Other',
         '',
         'Rules:',
-        '- ItemDescription must be clear, specific, and uniquely identifiable. Include brand/model/capacity/color where visible. Avoid generic terms like "Pan" or "DJ equipment".',
-        '- Quantity: integer >= 1.',
-        '- valueGbp: integer >= 0. If price/value is not visible, set to 0 (do not guess).',
-        '- countryOfOrigin: ONLY if explicitly visible (e.g., "Made in ..."). Otherwise empty string.',
-        '- weightKg: ONLY if explicitly visible or clearly printed. Otherwise null.',
-        '- serialNumber: ONLY if explicitly visible. If not visible, use "N/A".',
-        '- notes: include helpful evidence like: "Label shows MODEL XYZ", "Case marked 03", "Sticker reads Made in UK", "Serial on rear panel". Otherwise empty string.',
+        '- item_name: clear and professional; include brand/model/size/material where visible',
+        '- quantity: integer >= 1',
+        '- estimated_value_gbp: realistic estimate per item (integer); use 0 if not visible',
+        '- notes: optional details like size, material, brand if visible; or "Made in X", serial if visible',
         '- No markdown, no extra keys.',
       ].join('\n');
 
@@ -92,25 +95,29 @@ async function startServer() {
         return res.status(502).json({ error: 'Model returned non-JSON output.', raw: text });
       }
 
-      const items = Array.isArray(parsed?.items) ? parsed.items : null;
-      if (!items) {
+      const rawItems = Array.isArray(parsed?.items) ? parsed.items : Array.isArray(parsed) ? parsed : null;
+      if (!rawItems) {
         return res.status(502).json({ error: 'Model JSON did not include an items array.', raw: parsed });
       }
 
-      // Minimal shape validation; frontend normalizes further.
-      const sanitizedItems = items
+      // Map item_name/estimated_value_gbp to our schema; frontend normalizes further.
+      const sanitizedItems = rawItems
         .filter((it: any) => it && typeof it === 'object')
-        .map((it: any) => ({
-          itemDescription: typeof it.itemDescription === 'string' ? it.itemDescription : '',
-          category: typeof it.category === 'string' ? it.category : 'Other',
-          quantity: Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1,
-          valueGbp: Number.isFinite(Number(it.valueGbp)) ? Number(it.valueGbp) : 0,
-          countryOfOrigin: typeof it.countryOfOrigin === 'string' ? it.countryOfOrigin : '',
-          weightKg: it.weightKg === null || Number.isFinite(Number(it.weightKg)) ? it.weightKg : null,
-          serialNumber: typeof it.serialNumber === 'string' ? it.serialNumber : 'N/A',
-          notes: typeof it.notes === 'string' ? it.notes : '',
-        }))
-        .filter((it: any) => typeof it.itemDescription === 'string' && it.itemDescription.trim().length > 0);
+        .map((it: any) => {
+          const desc = it.item_name ?? it.itemDescription ?? it.itemName ?? '';
+          const val = Number(it.estimated_value_gbp ?? it.valueGbp ?? it.estimatedValueGbp ?? 0);
+          return {
+            itemDescription: typeof desc === 'string' ? desc.trim() : '',
+            category: typeof it.category === 'string' ? it.category : 'Other',
+            quantity: Number.isFinite(Number(it.quantity)) ? Math.max(1, Math.round(Number(it.quantity))) : 1,
+            valueGbp: Number.isFinite(val) ? Math.max(0, Math.round(val)) : 0,
+            countryOfOrigin: typeof it.countryOfOrigin === 'string' ? it.countryOfOrigin : '',
+            weightKg: it.weightKg === null || Number.isFinite(Number(it.weightKg)) ? it.weightKg : null,
+            serialNumber: typeof it.serialNumber === 'string' ? it.serialNumber : 'N/A',
+            notes: typeof it.notes === 'string' ? it.notes : '',
+          };
+        })
+        .filter((it: any) => typeof it.itemDescription === 'string' && it.itemDescription.length > 0);
 
       return res.json({ items: sanitizedItems });
     } catch (err: any) {

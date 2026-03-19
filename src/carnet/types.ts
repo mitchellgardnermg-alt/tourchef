@@ -1,5 +1,8 @@
 export type CarnetCategory =
   | 'Kitchen Equipment'
+  | 'Utensils'
+  | 'Electrical Equipment'
+  | 'Furniture'
   | 'Production Equipment'
   | 'Instruments'
   | 'Audio Equipment'
