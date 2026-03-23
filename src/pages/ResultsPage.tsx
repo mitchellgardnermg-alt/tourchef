@@ -8,11 +8,12 @@ import {
   Wand2,
   AlertTriangle,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { exportCarnetAsExcel, exportCarnetAsPdf } from '../carnet/export';
 import { filesToUploadedImages, useCarnet } from '../carnet/store';
-import type { CarnetCategory, CarnetItem } from '../carnet/types';
+import type { CarnetCategory, CarnetItem, UploadedImage } from '../carnet/types';
 import { normalizeAiItems } from '../carnet/ai';
 import { validateCarnetItems } from '../carnet/validation';
 
@@ -159,6 +160,7 @@ export function ResultsPage() {
   const [showOnlyLowConfidence, setShowOnlyLowConfidence] = React.useState(false);
   const [reviewMode, setReviewMode] = React.useState(false);
   const [reviewIndex, setReviewIndex] = React.useState(0);
+  const [pendingImages, setPendingImages] = React.useState<UploadedImage[]>([]);
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -181,6 +183,15 @@ export function ResultsPage() {
       mounted = false;
     };
   }, []);
+
+  const pendingRef = React.useRef<UploadedImage[]>([]);
+  pendingRef.current = pendingImages;
+  React.useEffect(
+    () => () => {
+      pendingRef.current.forEach((img) => URL.revokeObjectURL(img.objectUrl));
+    },
+    []
+  );
 
   const totalValue = React.useMemo(
     () => items.reduce((acc, it) => acc + (it.valueGbp || 0) * (it.quantity || 0), 0),
@@ -249,22 +260,33 @@ export function ResultsPage() {
     });
   };
 
-  const onPickMoreImages = () => uploadInputRef.current?.click();
+  const onPickAnalysisPhotos = () => uploadInputRef.current?.click();
 
-  const onMoreImagesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onAnalysisPhotosSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     e.target.value = '';
     if (!files || files.length === 0) return;
+    setExtractError(null);
+    setExtractInfo(null);
+    setPendingImages((prev) => [...prev, ...filesToUploadedImages(files)]);
+  };
 
-    const selectedImages = filesToUploadedImages(files);
+  const removePendingImage = (id: string) => {
+    setPendingImages((prev) => {
+      const target = prev.find((x) => x.id === id);
+      if (target) URL.revokeObjectURL(target.objectUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+  };
 
+  const analyzePendingImages = async () => {
+    if (pendingImages.length === 0) return;
     setExtractError(null);
     setExtractInfo(null);
     setIsExtracting(true);
-
     try {
       const fd = new FormData();
-      for (const img of selectedImages) fd.append('images', img.file, img.file.name);
+      for (const img of pendingImages) fd.append('images', img.file, img.file.name);
 
       const resp = await fetch('/api/extract-carnet-items', { method: 'POST', body: fd });
       if (!resp.ok) {
@@ -282,33 +304,32 @@ export function ResultsPage() {
       if (warnings.length) console.warn('AI warnings:', warnings);
       if (!aiItems.length) {
         setExtractError('AI did not return any items from these photos. Try clearer images.');
-        selectedImages.forEach((img) => URL.revokeObjectURL(img.objectUrl));
         return;
       }
 
       setItems((prev) => mergeItems(prev, aiItems));
-      addImages(selectedImages);
+      addImages(pendingImages);
+      setPendingImages([]);
       addExtractionRun({
         source: 'results_upload_more',
-        imageCount: selectedImages.length,
+        imageCount: pendingImages.length,
         extractedItemCount: aiItems.length,
       });
       addAuditEvent({
         type: 'items_appended',
         message: `Appended ${aiItems.length} item${
           aiItems.length === 1 ? '' : 's'
-        } from ${selectedImages.length} additional image${
-          selectedImages.length === 1 ? '' : 's'
+        } from ${pendingImages.length} additional image${
+          pendingImages.length === 1 ? '' : 's'
         }.`,
       });
       setExtractInfo(
-        `Added ${aiItems.length} item${aiItems.length === 1 ? '' : 's'} from new image${
-          selectedImages.length === 1 ? '' : 's'
+        `Added ${aiItems.length} item${aiItems.length === 1 ? '' : 's'} from ${pendingImages.length} new image${
+          pendingImages.length === 1 ? '' : 's'
         }.`
       );
     } catch (err: any) {
       setExtractError(err?.message || 'Request failed. Check your connection and server.');
-      selectedImages.forEach((img) => URL.revokeObjectURL(img.objectUrl));
     } finally {
       setIsExtracting(false);
     }
@@ -407,8 +428,8 @@ export function ResultsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="btn btn-secondary" onClick={onPickMoreImages} title="Add more photos to extract from">
-              <ImagePlus size={16} /> Upload more images
+            <button className="btn btn-secondary" onClick={onPickAnalysisPhotos} title="Pick photos to analyze and add as items">
+              <ImagePlus size={16} /> Add from photos
             </button>
             <input
               ref={uploadInputRef}
@@ -416,7 +437,7 @@ export function ResultsPage() {
               accept="image/*"
               multiple
               className="hidden"
-              onChange={onMoreImagesSelected}
+              onChange={onAnalysisPhotosSelected}
             />
             <button className="btn btn-secondary" onClick={onAddItem}>
               <Plus size={16} /> Add Item
@@ -459,6 +480,45 @@ export function ResultsPage() {
                 Extracting items from your new photos…
               </span>
             </div>
+          ) : null}
+
+          {pendingImages.length > 0 ? (
+            <section className="card mb-6 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Add items from photos</div>
+                  <div className="mt-1 text-xs text-white/60">
+                    {pendingImages.length} photo{pendingImages.length === 1 ? '' : 's'} selected. Click analyze to add items to this list.
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={analyzePendingImages}
+                  disabled={isExtracting || aiConfigured === false}
+                  title={aiConfigured === false ? 'Set OPENAI_API_KEY on the server' : ''}
+                >
+                  <Wand2 size={16} /> Analyze photos
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {pendingImages.map((img) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <img src={img.objectUrl} alt={img.file.name} className="h-32 w-full object-cover" />
+                    <div className="p-3">
+                      <div className="truncate text-xs text-white/70">{img.file.name}</div>
+                    </div>
+                    <button
+                      onClick={() => removePendingImage(img.id)}
+                      className="absolute right-2 top-2 rounded-lg bg-black/40 border border-white/10 p-2 opacity-0 backdrop-blur-sm transition group-hover:opacity-100"
+                      aria-label="Remove image"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           <section className="card mb-6 p-5">
