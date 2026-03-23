@@ -307,9 +307,20 @@ export function ResultsPage() {
         return;
       }
 
-      setItems((prev) => mergeItems(prev, aiItems));
+      let addedRows = 0;
+      let updatedRows = 0;
+      setItems((prev) => {
+        const merged = mergeItems(prev, aiItems);
+        addedRows = Math.max(0, merged.length - prev.length);
+        updatedRows = Math.max(0, aiItems.length - addedRows);
+        return merged;
+      });
       addImages(pendingImages);
       setPendingImages([]);
+      // Ensure new/updated rows are visible immediately after analysis.
+      setShowOnlyBlockers(false);
+      setShowOnlyLowConfidence(false);
+      setReviewMode(false);
       addExtractionRun({
         source: 'results_upload_more',
         imageCount: pendingImages.length,
@@ -317,14 +328,14 @@ export function ResultsPage() {
       });
       addAuditEvent({
         type: 'items_appended',
-        message: `Appended ${aiItems.length} item${
-          aiItems.length === 1 ? '' : 's'
-        } from ${pendingImages.length} additional image${
+        message: `Analyzed ${pendingImages.length} additional image${
           pendingImages.length === 1 ? '' : 's'
-        }.`,
+        }: added ${addedRows} new item${addedRows === 1 ? '' : 's'}, updated ${updatedRows} existing.`,
       });
       setExtractInfo(
-        `Added ${aiItems.length} item${aiItems.length === 1 ? '' : 's'} from ${pendingImages.length} new image${
+        `AI extraction complete: added ${addedRows} new row${
+          addedRows === 1 ? '' : 's'
+        } and updated ${updatedRows} existing from ${pendingImages.length} photo${
           pendingImages.length === 1 ? '' : 's'
         }.`
       );
@@ -405,6 +416,23 @@ export function ResultsPage() {
 
   return (
     <div className="min-h-screen bg-app text-app">
+      {isExtracting ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-zinc-950/95 p-6 text-center shadow-2xl">
+            <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-white/15 bg-white/5">
+              <Wand2 size={20} className="animate-spin text-white/90" />
+            </div>
+            <h3 className="text-base font-semibold">Generating carnet items...</h3>
+            <p className="mt-2 text-sm text-white/65">
+              AI is analyzing your photos and adding results to the current list.
+            </p>
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-white/60" />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto max-w-6xl px-4 py-10">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -469,7 +497,10 @@ export function ResultsPage() {
           ) : null}
           {extractInfo ? (
             <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              {extractInfo}
+              <div className="inline-flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                <span>{extractInfo}</span>
+              </div>
             </div>
           ) : null}
 
