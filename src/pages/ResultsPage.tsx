@@ -24,25 +24,35 @@ function parseNumber(value: string, fallback: number) {
 }
 
 function mergeItems(existing: CarnetItem[], incoming: CarnetItem[]): CarnetItem[] {
-  const keyOf = (it: CarnetItem) =>
-    `${it.category}::${(it.serialNumber || '').trim().toLowerCase()}::${it.itemDescription
-      .trim()
-      .toLowerCase()}`;
+  const normalizeText = (s: string) => s.trim().toLowerCase();
+  const normalizeSerial = (s?: string) => normalizeText(s ?? '');
+  const hasRealSerial = (s?: string) => {
+    const serial = normalizeSerial(s);
+    return serial !== '' && serial !== 'n/a' && serial !== 'no serial';
+  };
+  const sameDescriptionCategory = (a: CarnetItem, b: CarnetItem) =>
+    normalizeText(a.itemDescription) === normalizeText(b.itemDescription) &&
+    a.category === b.category;
 
-  const byKey = new Map<string, CarnetItem>();
   const next: CarnetItem[] = existing.map((it) => {
-    const copy = { ...it };
-    byKey.set(keyOf(copy), copy);
-    return copy;
+    return { ...it };
   });
 
   for (const inc of incoming) {
-    const k = keyOf(inc);
-    const found = byKey.get(k);
+    // Only merge when we have strong evidence it's the same item.
+    // If serial is missing ("N/A"), append as a new row so new uploads visibly add.
+    const incomingSerial = normalizeSerial(inc.serialNumber);
+    const incomingHasRealSerial = hasRealSerial(inc.serialNumber);
+
+    const found = next.find((ex) => {
+      if (!sameDescriptionCategory(ex, inc)) return false;
+      if (!incomingHasRealSerial) return false;
+      return normalizeSerial(ex.serialNumber) === incomingSerial;
+    });
+
     if (!found) {
       const copy = { ...inc };
       next.push(copy);
-      byKey.set(k, copy);
       continue;
     }
 
