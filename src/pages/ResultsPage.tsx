@@ -1,9 +1,9 @@
 import React from 'react';
-import { Download, FileSpreadsheet, Plus, ArrowLeft, ImagePlus, Wand2 } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, ArrowLeft, ImagePlus, Wand2, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { exportCarnetAsExcel, exportCarnetAsPdf } from '../carnet/export';
 import { filesToUploadedImages, useCarnet } from '../carnet/store';
-import type { CarnetCategory, CarnetItem } from '../carnet/types';
+import type { CarnetCategory, CarnetItem, UploadedImage } from '../carnet/types';
 import { normalizeAiItems } from '../carnet/ai';
 
 const CATEGORIES: CarnetCategory[] = [
@@ -40,12 +40,13 @@ function mergeItems(existing: CarnetItem[], incoming: CarnetItem[]): CarnetItem[
     const k = keyOf(inc);
     const found = byKey.get(k);
     if (!found) {
-      next.push({ ...inc });
-      byKey.set(k, next[next.length - 1]);
+      const copy = { ...inc };
+      next.push(copy);
+      byKey.set(k, copy);
       continue;
     }
 
-    // Merge conservatively: increase quantity; fill blanks only.
+    // Keep user edits and only enrich missing fields.
     found.quantity = Math.max(0, (found.quantity || 0) + (inc.quantity || 0));
     if (!found.valueGbp && inc.valueGbp) found.valueGbp = inc.valueGbp;
     if (!found.countryOfOrigin && inc.countryOfOrigin) found.countryOfOrigin = inc.countryOfOrigin;
@@ -69,6 +70,7 @@ export function ResultsPage() {
   const [aiConfigured, setAiConfigured] = React.useState<boolean | null>(null);
   const [isExtracting, setIsExtracting] = React.useState(false);
   const [extractError, setExtractError] = React.useState<string | null>(null);
+  const [pendingImages, setPendingImages] = React.useState<UploadedImage[]>([]);
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -92,6 +94,12 @@ export function ResultsPage() {
     };
   }, []);
 
+  const pendingRef = React.useRef<UploadedImage[]>([]);
+  pendingRef.current = pendingImages;
+  React.useEffect(() => () => {
+    pendingRef.current.forEach((img) => URL.revokeObjectURL(img.objectUrl));
+  }, []);
+
   const totalValue = React.useMemo(
     () => items.reduce((acc, it) => acc + (it.valueGbp || 0) * (it.quantity || 0), 0),
     [items]
@@ -110,20 +118,29 @@ export function ResultsPage() {
 
   const onPickMoreImages = () => uploadInputRef.current?.click();
 
-  const onMoreImagesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
+  const onMoreImagesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setPendingImages((prev) => [...prev, ...filesToUploadedImages(files)]);
+    setExtractError(null);
     e.target.value = '';
-    if (!fileList || fileList.length === 0) return;
+  };
 
+  const removePendingImage = (id: string) => {
+    setPendingImages((prev) => {
+      const target = prev.find((x) => x.id === id);
+      if (target) URL.revokeObjectURL(target.objectUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+  };
+
+  const extractFromPending = async () => {
+    if (pendingImages.length === 0) return;
     setExtractError(null);
     setIsExtracting(true);
-
-    const newUploaded = filesToUploadedImages(fileList);
-    addImages(newUploaded);
-
     try {
       const fd = new FormData();
-      for (const img of newUploaded) fd.append('images', img.file, img.file.name);
+      for (const img of pendingImages) fd.append('images', img.file, img.file.name);
 
       const resp = await fetch('/api/extract-carnet-items', { method: 'POST', body: fd });
       if (!resp.ok) {
@@ -145,6 +162,8 @@ export function ResultsPage() {
       }
 
       setItems((prev) => mergeItems(prev, aiItems));
+      addImages(pendingImages);
+      setPendingImages([]);
     } catch (err: any) {
       setExtractError(err?.message || 'Request failed. Check your connection and server.');
     } finally {
@@ -181,16 +200,7 @@ export function ResultsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              className="btn btn-secondary"
-              onClick={onPickMoreImages}
-              disabled={isExtracting || aiConfigured === false}
-              title={
-                aiConfigured === false
-                  ? 'Set OPENAI_API_KEY on the server to extract from photos'
-                  : ''
-              }
-            >
+            <button className="btn btn-secondary" onClick={onPickMoreImages} title="Add more photos to extract from">
               <ImagePlus size={16} /> Upload more images
             </button>
             <input
@@ -227,6 +237,46 @@ export function ResultsPage() {
                 Extracting items from your new photos…
               </span>
             </div>
+          ) : null}
+
+          {pendingImages.length > 0 ? (
+            <section className="card p-6 mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">New photos to extract</h3>
+                  <p className="mt-1 text-xs text-white/60">
+                    {pendingImages.length} photo{pendingImages.length === 1 ? '' : 's'} ready. Click &quot;Extract & add to list&quot; to add items.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="btn btn-primary"
+                    onClick={extractFromPending}
+                    disabled={isExtracting || aiConfigured === false}
+                    title={aiConfigured === false ? 'Set OPENAI_API_KEY on the server' : ''}
+                  >
+                    <Wand2 size={16} /> Extract & add to list
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {pendingImages.map((img) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <img src={img.objectUrl} alt={img.file.name} className="h-32 w-full object-cover" />
+                    <div className="p-3">
+                      <div className="truncate text-xs text-white/70">{img.file.name}</div>
+                    </div>
+                    <button
+                      onClick={() => removePendingImage(img.id)}
+                      className="absolute right-2 top-2 rounded-lg bg-black/40 border border-white/10 p-2 opacity-0 backdrop-blur-sm transition group-hover:opacity-100"
+                      aria-label="Remove"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           <section className="card overflow-hidden">
