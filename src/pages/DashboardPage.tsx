@@ -6,7 +6,15 @@ import { normalizeAiItems } from '../carnet/ai';
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { images, addImages, removeImage, clearItems, setItems } = useCarnet();
+  const {
+    images,
+    addImages,
+    removeImage,
+    clearItems,
+    setItems,
+    addExtractionRun,
+    addAuditEvent,
+  } = useCarnet();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [lastError, setLastError] = React.useState<string | null>(null);
@@ -58,6 +66,17 @@ export function DashboardPage() {
         if (warnings.length) console.warn('AI warnings:', warnings);
         if (aiItems.length) {
           setItems(aiItems);
+          addExtractionRun({
+            source: 'dashboard',
+            imageCount: images.length,
+            extractedItemCount: aiItems.length,
+          });
+          addAuditEvent({
+            type: 'items_generated',
+            message: `Generated ${aiItems.length} item${
+              aiItems.length === 1 ? '' : 's'
+            } from ${images.length} image${images.length === 1 ? '' : 's'}.`,
+          });
           navigate('/results');
           return;
         }

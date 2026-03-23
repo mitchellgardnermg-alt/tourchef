@@ -64,15 +64,19 @@ async function startServer() {
         '- Use only what is visible; do NOT invent items or guess values if not supported by the photos',
         '',
         'Return JSON only. Use this exact shape (array of objects):',
-        '[ { "item_name": string, "category": string, "quantity": number, "estimated_value_gbp": number, "notes": string } ]',
+        '[ { "item_name": string, "category": string, "quantity": number, "estimated_value_gbp": number, "value_estimated": boolean, "value_estimation_reason": string, "notes": string, "confidence": number, "evidence": string } ]',
         '',
         'Categories (choose one per item): Kitchen Equipment, Utensils, Electrical Equipment, Furniture, Audio Equipment, Other',
         '',
         'Rules:',
         '- item_name: clear and professional; include brand/model/size/material where visible',
         '- quantity: integer >= 1',
-        '- estimated_value_gbp: realistic estimate per item (integer); use 0 if not visible',
+        '- estimated_value_gbp: realistic estimate per item (integer). If exact value not visible, estimate market value',
+        '- value_estimated: true when estimated_value_gbp is inferred/estimated, false when directly supported by visible price/value cues',
+        '- value_estimation_reason: short reason when value_estimated is true',
         '- notes: optional details like size, material, brand if visible; or "Made in X", serial if visible',
+        '- confidence: integer 0-100 for how confident you are in this row',
+        '- evidence: short reason citing visible details (label text, shape, brand, serial sticker, etc.)',
         '- No markdown, no extra keys.',
       ].join('\n');
 
@@ -115,6 +119,22 @@ async function startServer() {
             weightKg: it.weightKg === null || Number.isFinite(Number(it.weightKg)) ? it.weightKg : null,
             serialNumber: typeof it.serialNumber === 'string' ? it.serialNumber : 'N/A',
             notes: typeof it.notes === 'string' ? it.notes : '',
+            aiConfidence: Number.isFinite(Number(it.confidence))
+              ? Math.max(0, Math.min(100, Math.round(Number(it.confidence))))
+              : undefined,
+            aiEvidence: typeof it.evidence === 'string' ? it.evidence : undefined,
+            aiValueEstimated:
+              typeof it.value_estimated === 'boolean'
+                ? it.value_estimated
+                : typeof it.is_value_estimated === 'boolean'
+                  ? it.is_value_estimated
+                  : undefined,
+            aiValueEstimateReason:
+              typeof it.value_estimation_reason === 'string'
+                ? it.value_estimation_reason
+                : typeof it.value_estimate_reason === 'string'
+                  ? it.value_estimate_reason
+                  : undefined,
           };
         })
         .filter((it: any) => typeof it.itemDescription === 'string' && it.itemDescription.length > 0);
