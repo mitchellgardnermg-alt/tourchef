@@ -263,9 +263,9 @@ export function ResultsPage() {
   const onPickAnalysisPhotos = () => uploadInputRef.current?.click();
 
   const onAnalysisPhotosSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    e.target.value = '';
-    if (!files || files.length === 0) return;
+    const files: File[] = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
+    e.currentTarget.value = '';
+    if (files.length === 0) return;
     setExtractError(null);
     setExtractInfo(null);
     setPendingImages((prev) => [...prev, ...filesToUploadedImages(files)]);
